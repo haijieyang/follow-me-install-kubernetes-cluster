@@ -1,15 +1,27 @@
-# 配置和安装 dashboard
+<!-- toc -->
+
+tags: dashboard
+
+# 部署 dashboard 插件
 
 官方文件目录：`kubernetes/cluster/addons/dashboard`
 
-使用的文件
+使用的文件：
 
 ``` bash
 $ ls *.yaml
-dashboard-controller.yaml  dashboard-service.yaml
+dashboard-controller.yaml  dashboard-rbac.yaml  dashboard-service.yaml
 ```
 
-已经修改好的 yaml 文件见：[dashboard](./manifests/dashboard)
++ 新加了 `dashboard-rbac.yaml` 文件，定义 dashboard 使用的 RoleBinding。
+
+由于 `kube-apiserver` 启用了 `RBAC` 授权，而官方源码目录的 `dashboard-controller.yaml` 没有定义授权的 ServiceAccount，所以后续访问 `kube-apiserver` 的 API 时会被拒绝，前端界面提示：
+
+![dashboard-403.png](./images/dashboard-403.png)
+
+解决办法是：定义一个名为 dashboard 的 ServiceAccount，然后将它和 Cluster Role view 绑定，具体参考 [dashboard-rbac.yaml文件](./manifests/dashboard/dashboard-rbac.yaml)。
+
+已经修改好的 yaml 文件见：[dashboard](https://github.com/opsnull/follow-me-install-kubernetes-cluster/blob/master/manifests/dashboard)。
 
 ## 配置dashboard-service
 
@@ -24,12 +36,15 @@ $ diff dashboard-service.yaml.orig dashboard-service.yaml
 ## 配置dashboard-controller
 
 ``` bash
-$ diff dashboard-controller.yaml.orig dashboard-controller.yaml
-23c23
+20a21
+>       serviceAccountName: dashboard
+23c24
 <         image: gcr.io/google_containers/kubernetes-dashboard-amd64:v1.6.0
 ---
 >         image: cokabug/kubernetes-dashboard-amd64:v1.6.0
 ```
+
++ 使用名为 dashboard 的自定义 ServiceAccount；
 
 ## 执行所有定义文件
 
@@ -37,13 +52,10 @@ $ diff dashboard-controller.yaml.orig dashboard-controller.yaml
 $ pwd
 /root/kubernetes/cluster/addons/dashboard
 $ ls *.yaml
-dashboard-controller.yaml  dashboard-service.yaml
+dashboard-controller.yaml  dashboard-rbac.yaml  dashboard-service.yaml
 $ kubectl create -f  .
-service "kubernetes-dashboard" created
-deployment "kubernetes-dashboard" created
+$
 ```
-
-
 
 ## 检查执行结果
 
@@ -98,7 +110,9 @@ KubeDNS is running at https://10.64.3.7:6443/api/v1/proxy/namespaces/kube-system
 kubernetes-dashboard is running at https://10.64.3.7:6443/api/v1/proxy/namespaces/kube-system/services/kubernetes-dashboard
 ```
 
-浏览器访问 URL：`https://10.64.3.7:6443/api/v1/proxy/namespaces/kube-system/services/kubernetes-dashboard`
+由于 kube-apiserver 开启了 RBAC 授权，而浏览器访问 kube-apiserver 的时候使用的是匿名证书，所以访问安全端口会导致授权失败。这里需要使用**非安全**端口访问 kube-apiserver：
+
+浏览器访问 URL：`http://10.64.3.7:8080/api/v1/proxy/namespaces/kube-system/services/kubernetes-dashboard`
 
 ![kubernetes-dashboard](./images/dashboard.png)
 

@@ -1,15 +1,19 @@
-# 安装和配置 kubedns 插件
+<!-- toc -->
+
+tags: kubedns
+
+# 部署 kubedns 插件
 
 官方文件目录：`kubernetes/cluster/addons/dns`
 
-使用的文件
+使用的文件：
 
 ``` bash
 $ ls *.yaml *.base
 kubedns-cm.yaml  kubedns-sa.yaml  kubedns-controller.yaml.base  kubedns-svc.yaml.base
 ```
 
-已经修改好的 yaml 文件见：[dns](./manifests/kubedns)
+已经修改好的 yaml 文件见：[dns](https://github.com/opsnull/follow-me-install-kubernetes-cluster/blob/master/manifests/kubedns)。
 
 ## 系统预定义的 RoleBinding
 
@@ -55,7 +59,7 @@ $ diff kubedns-svc.yaml.base kubedns-svc.yaml
 >   clusterIP: 10.254.0.2
 ```
 
-+ spec.clusterIP = 10.254.0.2，即明确指定了 kube-dns Service IP，这个 IP 需要和 kubelet 的 `—cluster-dns` 参数值一致；
++ 需要将 spec.clusterIP 设置为[集群环境变量](https://github.com/opsnull/follow-me-install-kubernetes-cluster/blob/master/manifests/environment.sh)中变量 `CLUSTER_DNS_SVC_IP` 值，这个 IP 需要和 kubelet 的 `—cluster-dns` 参数值一致；
 
 ## 配置 `kube-dns` Deployment
 
@@ -93,6 +97,7 @@ $ diff kubedns-controller.yaml.base kubedns-controller.yaml
 >         - --probe=dnsmasq,127.0.0.1:53,kubernetes.default.svc.cluster.local.,5,A
 ```
 
++ `--domain` 为[集群环境文档](01-environment.md) 变量 `CLUSTER_DNS_DOMAIN` 的值；
 + 使用系统已经做了 RoleBinding 的 `kube-dns` ServiceAccount，该账户具有访问 kube-apiserver DNS 相关 API 的权限；
 
 ## 执行所有定义文件
@@ -103,9 +108,8 @@ $ pwd
 $ ls *.yaml
 kubedns-cm.yaml  kubedns-controller.yaml  kubedns-sa.yaml  kubedns-svc.yaml
 $ kubectl create -f .
+$
 ```
-
-
 
 ## 检查 kubedns 功能
 
@@ -141,9 +145,20 @@ $ kubectl get services --all-namespaces |grep my-nginx
 default       my-nginx               10.254.86.48     <none>        80/TCP          1d
 ```
 
-创建另一个 Pod，查看 `/etc/resolv.conf` 是否包含 `kubelet` 配置的 `--cluster_dns` 和 `--cluster_domain`，是否能够将服务 `my-nginx` 解析到 Cluster IP `10.254.86.48`
+创建另一个 Pod，查看 `/etc/resolv.conf` 是否包含 `kubelet` 配置的 `--cluster-dns` 和 `--cluster-domain`，是否能够将服务 `my-nginx` 解析到上面显示的 Cluster IP `10.254.86.48`
 
 ``` bash
+$ cat pod-nginx.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.7.9
+    ports:
+    - containerPort: 80
 $ kubectl create -f pod-nginx.yaml
 $ kubectl exec  nginx -i -t -- /bin/bash
 root@nginx:/# cat /etc/resolv.conf
